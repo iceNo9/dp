@@ -10,11 +10,11 @@ class MappingManager:
 
     def _load(self):
         if os.path.exists(self.file_path):
-            with open(self.file_path, 'r') as f:
+            with open(self.file_path, 'r', encoding='utf-8') as f:
                 self.mappings = json.load(f)
 
     def _save(self):
-        with open(self.file_path, 'w') as f:
+        with open(self.file_path, 'w', encoding='utf-8') as f:
             json.dump(self.mappings, f, indent=2)
 
     def add(self, file_path, password):
@@ -28,7 +28,7 @@ class MappingManager:
 
     def _hash_file(self, file_path):
         hasher = hashlib.sha256()
-        with open(file_path, 'rb') as f:
+        with open(file_path, 'rb', encoding='utf-8') as f:
             while chunk := f.read(4096):
                 hasher.update(chunk)
         return hasher.hexdigest()

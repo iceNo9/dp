@@ -8,12 +8,12 @@ class PasswordManager:
 
     def _load(self):
         if os.path.exists(self.file_path):
-            with open(self.file_path, 'r') as f:
+            with open(self.file_path, 'r', encoding='utf-8') as f:
                 self.passwords = sorted({line.strip() for line in f if line.strip()})
         self._save()
 
     def _save(self):
-        with open(self.file_path, 'w') as f:
+        with open(self.file_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(self.passwords))
 
     def add(self, password):

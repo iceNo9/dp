@@ -76,7 +76,7 @@ class DpCLI(cmd.Cmd):
             print("Successfully logged in to WebDAV.")
             self._is_online = True  # 登录成功，状态为 Online
             # 登录后立即同步一次
-            self.webdav.list_remote_files('')
+            # self.webdav.list_remote_files('')
             self.webdav.sync(self.pwd_manager, self.map_manager)
             print("Initial sync completed.")
             # 启动同步线程

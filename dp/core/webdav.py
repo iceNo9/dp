@@ -23,7 +23,7 @@ class WebDAVClient:
             with open('temp_pwd.txt', 'r') as f:
                 remote_pwd = [line.strip() for line in f]
             password_manager.merge(remote_pwd)
-            self.client.upload('passwords.txt', password_manager.file_path)
+            # self.client.upload('passwords.txt', password_manager.file_path)
         except Exception as e:
             print(f"Password sync failed: {e}")
 
@@ -34,7 +34,7 @@ class WebDAVClient:
                 remote_map = json.load(f)
             mapping_manager.mappings.update(remote_map)
             mapping_manager._save()
-            self.client.upload('mappings.json', mapping_manager.file_path)
+            # self.client.upload('mappings.json', mapping_manager.file_path)
         except Exception as e:
             print(f"Mapping sync failed: {e}")
 

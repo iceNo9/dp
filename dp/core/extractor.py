@@ -1,5 +1,5 @@
 ﻿import os
-import zipfile
+import pyzipper
 import py7zr
 import rarfile
 import tarfile
@@ -40,11 +40,13 @@ class Extractor:
             return False
 
     def _extract_zip(self, path, output, pwd):
-        with zipfile.ZipFile(path) as zf:
+        with pyzipper.AESZipFile(path) as zf:
+            if pwd:
+                zf.setpassword(pwd.encode('utf-8'))
             total = sum(f.file_size for f in zf.infolist())
             with tqdm(total=total, unit='B', unit_scale=True) as pbar:
                 for f in zf.infolist():
-                    zf.extract(f, output, pwd=pwd.encode() if pwd else None)
+                    zf.extract(f, output)
                     pbar.update(f.file_size)
 
     def _extract_7z(self, path, output, pwd):

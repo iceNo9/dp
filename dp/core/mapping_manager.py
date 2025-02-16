@@ -28,7 +28,7 @@ class MappingManager:
 
     def _hash_file(self, file_path):
         hasher = hashlib.sha256()
-        with open(file_path, 'rb', encoding='utf-8') as f:
+        with open(file_path, 'rb') as f:
             while chunk := f.read(4096):
                 hasher.update(chunk)
         return hasher.hexdigest()

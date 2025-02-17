@@ -1,13 +1,16 @@
-﻿import cmd
+﻿import argparse
+import cmd
 import json
 import os
 import threading
 import time
+import shlex
 from dp.core.config import ConfigManager
 from dp.core.password_manager import PasswordManager
 from dp.core.mapping_manager import MappingManager
 from dp.core.webdav import WebDAVClient
 from dp.core.extractor import Extractor
+
 
 class DpCLI(cmd.Cmd):
     prompt = '(dp) '
@@ -34,29 +37,44 @@ class DpCLI(cmd.Cmd):
             self.webdav.sync(self.pwd_manager, self.map_manager)
             time.sleep(600)  # 10 minutes
 
+    def parse_args(self, arg):
+        """统一参数解析函数"""
+        return argparse.ArgumentParser().parse_args(shlex.split(arg))
+
     def do_webdav(self, arg):
         """Set WebDAV credentials: webdav [url|username|password] <value>"""
-        args = arg.split()
-        if len(args) != 2:
-            print("Invalid format. Usage: webdav [url|username|password] <value>")
+        parser = argparse.ArgumentParser(description="Set WebDAV credentials.")
+        parser.add_argument('key', type=str, help='url|username|password')
+        parser.add_argument('value', type=str, help='The value to set for the key')
+
+        try:
+            args = parser.parse_args(shlex.split(arg))
+        except SystemExit:
+            print("Invalid command format for 'webdav'. Usage: webdav [url|username|password] <value>")
             return
         
-        key, value = args
-        if key not in ['url', 'username', 'password']:
+        if args.key not in ['url', 'username', 'password']:
             print("Invalid key. Must be one of: url, username, password")
             return
-        
+
         webdav_config = self.config.get_webdav_config()
-        webdav_config[key] = value
+        webdav_config[args.key] = args.value
         self.config.update_webdav_config(
             url=webdav_config['url'],
             username=webdav_config['username'],
             password=webdav_config['password']
         )
-        print(f"WebDAV {key} updated.")
+        print(f"WebDAV {args.key} updated.")
 
     def do_login(self, arg):
         """Login to WebDAV: login"""
+        parser = argparse.ArgumentParser(description="Login to WebDAV.")
+        try:
+            parser.parse_args(shlex.split(arg))  # No specific args needed
+        except SystemExit:
+            print("Invalid command format for 'login'. Usage: login")
+            return
+        
         webdav_config = self.config.get_webdav_config()
         url = webdav_config['url']
         username = webdav_config['username']
@@ -75,11 +93,8 @@ class DpCLI(cmd.Cmd):
             self.webdav = WebDAVClient(webdav_config)
             print("Successfully logged in to WebDAV.")
             self._is_online = True  # 登录成功，状态为 Online
-            # 登录后立即同步一次
-            # self.webdav.list_remote_files('')
             self.webdav.sync(self.pwd_manager, self.map_manager)
             print("Initial sync completed.")
-            # 启动同步线程
             self._start_sync()
         except Exception as e:
             print(f"Login failed: {e}")
@@ -87,55 +102,85 @@ class DpCLI(cmd.Cmd):
 
     def do_add(self, arg):
         """Add password: add <password> or add <file> <password>"""
-        args = arg.split()
-        if len(args) == 1:
-            self.pwd_manager.add(args[0])
+        parser = argparse.ArgumentParser(description="Add password or mapping.")
+        parser.add_argument('password', type=str, nargs='?', help='Password or file path')
+        parser.add_argument('map_password', type=str, nargs='?', help='Password for file mapping')
+
+        try:
+            args = parser.parse_args(shlex.split(arg))
+        except SystemExit:
+            print("Invalid arguments. Usage: add <password> or add <file> <password>")
+            return
+
+        if args.password and not args.map_password:
+            self.pwd_manager.add(args.password)
             print("Password added")
-        elif len(args) == 2:
-            self.map_manager.add(*args)
+        elif args.password and args.map_password:
+            self.map_manager.add(args.password, args.map_password)
             print("Mapping added")
         else:
             print("Invalid arguments")
 
     def do_import(self, arg):
         """Import data: import [passwords|mappings] <file>"""
-        args = arg.split()
-        if len(args) != 2:
-            print("Usage: import [passwords|mappings] <file>")
+        parser = argparse.ArgumentParser(description="Import passwords or mappings.")
+        parser.add_argument('type', type=str, choices=['passwords', 'mappings'], help="Type of data to import")
+        parser.add_argument('file', type=str, help="The file to import from")
+
+        try:
+            args = parser.parse_args(shlex.split(arg))
+        except SystemExit:
+            print("Invalid command format for 'import'. Usage: import [passwords|mappings] <file>")
             return
-        
-        if args[0] == 'passwords':
-            with open(args[1], 'r') as f:
+
+        if args.type == 'passwords':
+            with open(args.file, 'r') as f:
                 self.pwd_manager.merge([line.strip() for line in f])
             print("Passwords imported")
-        elif args[0] == 'mappings':
-            with open(args[1], 'r') as f:
+        elif args.type == 'mappings':
+            with open(args.file, 'r') as f:
                 self.map_manager.mappings.update(json.load(f))
             self.map_manager._save()
             print("Mappings imported")
 
     def do_export(self, arg):
         """Export data: export [directory]"""
-        dir = arg or '.'
-        os.makedirs(dir, exist_ok=True)
-        # Export passwords
-        with open(f"{dir}/passwords.txt", 'w') as f:
-            f.write('\n'.join(self.pwd_manager.passwords))
-        # Export mappings
-        with open(f"{dir}/mappings.json", 'w') as f:
-            json.dump(self.map_manager.mappings, f)
-        print(f"Data exported to {dir}")
+        parser = argparse.ArgumentParser(description="Export data.")
+        parser.add_argument('dir', type=str, nargs='?', default='.', help="Directory to export to")
 
-    def default(self, line):
-        """Handle file decompression: <file> [output_dir]"""
-        args = line.split()
-        if len(args) not in (1, 2):
-            print("Invalid command")
+        try:
+            args = parser.parse_args(shlex.split(arg))
+        except SystemExit:
+            print("Invalid command format for 'export'. Usage: export [directory]")
             return
-        
-        file_path = args[0]
-        output_dir = args[1] if len(args) == 2 else None
-        
+
+        os.makedirs(args.dir, exist_ok=True)
+        with open(f"{args.dir}/passwords.txt", 'w') as f:
+            f.write('\n'.join(self.pwd_manager.passwords))
+        with open(f"{args.dir}/mappings.json", 'w') as f:
+            json.dump(self.map_manager.mappings, f)
+        print(f"Data exported to {args.dir}")
+
+    def do_dp(self, arg):
+        """Decompress file: dp <file> [output_dir]"""
+        parser = argparse.ArgumentParser(description="File decompression")
+        parser.add_argument('file', type=str, help="The file to decompress")
+        parser.add_argument('output_dir', type=str, nargs='?', help="The output directory (default: source file's directory)")
+
+        try:
+            args = parser.parse_args(shlex.split(arg))
+        except SystemExit:
+            print("Invalid command format for 'dp'. Usage: dp <file> [output_dir]")
+            return
+
+        file_path = args.file
+        # 如果没有指定输出目录，则使用源文件的目录，并创建一个同名文件夹
+        if not args.output_dir:
+            output_dir = os.path.join(os.path.dirname(file_path), os.path.splitext(os.path.basename(file_path))[0])
+            os.makedirs(output_dir, exist_ok=True)
+        else:
+            output_dir = args.output_dir
+
         # Try known passwords
         passwords = [None] + self.pwd_manager.passwords
         for pwd in passwords:
@@ -145,6 +190,7 @@ class DpCLI(cmd.Cmd):
                     self.map_manager.add(file_path, pwd)
                 return
         print("Failed to extract with all passwords")
+
 
     def do_exit(self, arg):
         """Exit the program"""
@@ -167,3 +213,7 @@ class DpCLI(cmd.Cmd):
         status = "Online" if self._is_online else "Local"
         print(f"Status: {status}")
         return stop
+
+    def default(self, line):
+        """Handle unknown commands"""
+        print(f"Unknown command: '{line}'. Type 'help' for a list of commands.")

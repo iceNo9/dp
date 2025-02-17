@@ -1,5 +1,6 @@
 ﻿import configparser
 import os
+import keyring
 
 class ConfigManager:
     def __init__(self, config_path='data/config.ini'):
@@ -16,7 +17,6 @@ class ConfigManager:
         self.config['webdav'] = {
             'url': '',
             'username': '',
-            'password': '',
             'sync_interval': '10'
         }
         self.config['local'] = {
@@ -28,17 +28,23 @@ class ConfigManager:
             self.config.write(f)
 
     def get_webdav_config(self):
+        """Retrieve WebDAV config, excluding password (stored in keyring)"""
+        url = self.config['webdav']['url']
+        username = self.config['webdav']['username']
+        password = keyring.get_password('webdav', username)
         return {
-            'url': self.config['webdav']['url'],
-            'username': self.config['webdav']['username'],
-            'password': self.config['webdav']['password'],
+            'url': url,
+            'username': username,
+            'password': password,
             'sync_interval': int(self.config['webdav'].get('sync_interval', '10'))
         }
 
     def update_webdav_config(self, url, username, password):
+        """Update WebDAV config and save the password in keyring"""
         self.config['webdav']['url'] = url
         self.config['webdav']['username'] = username
-        self.config['webdav']['password'] = password
+        # Save password securely in keyring
+        keyring.set_password('webdav', username, password)
         with open(self.config_path, 'w') as f:
             self.config.write(f)
 

@@ -10,6 +10,7 @@ from dp.core.password_manager import PasswordManager
 from dp.core.mapping_manager import MappingManager
 from dp.core.webdav import WebDAVClient
 from dp.core.extractor import Extractor
+import keyring
 
 
 class DpCLI(cmd.Cmd):
@@ -78,14 +79,18 @@ class DpCLI(cmd.Cmd):
         webdav_config = self.config.get_webdav_config()
         url = webdav_config['url']
         username = webdav_config['username']
-        password = webdav_config['password']
 
-        if not url or not username or not password:
-            print("Error: WebDAV URL, username, and password must be set.")
+        if not url or not username:
+            print("Error: WebDAV URL and username must be set.")
             print("Use the following commands to set them:")
             print("  webdav url <url>")
             print("  webdav username <username>")
-            print("  webdav password <password>")
+            return
+
+        # 使用keyring获取密码
+        password = keyring.get_password('webdav', username)
+        if not password:
+            print("WebDAV password is not found in keyring.")
             return
 
         try:
@@ -107,6 +112,7 @@ class DpCLI(cmd.Cmd):
         parser.add_argument('map_password', type=str, nargs='?', help='Password for file mapping')
 
         try:
+            arg = arg.replace("\\", "/")
             args = parser.parse_args(shlex.split(arg))
         except SystemExit:
             print("Invalid arguments. Usage: add <password> or add <file> <password>")
@@ -128,6 +134,7 @@ class DpCLI(cmd.Cmd):
         parser.add_argument('file', type=str, help="The file to import from")
 
         try:
+            arg = arg.replace("\\", "/")
             args = parser.parse_args(shlex.split(arg))
         except SystemExit:
             print("Invalid command format for 'import'. Usage: import [passwords|mappings] <file>")
@@ -149,6 +156,7 @@ class DpCLI(cmd.Cmd):
         parser.add_argument('dir', type=str, nargs='?', default='.', help="Directory to export to")
 
         try:
+            arg = arg.replace("\\", "/")
             args = parser.parse_args(shlex.split(arg))
         except SystemExit:
             print("Invalid command format for 'export'. Usage: export [directory]")
@@ -168,6 +176,7 @@ class DpCLI(cmd.Cmd):
         parser.add_argument('output_dir', type=str, nargs='?', help="The output directory (default: source file's directory)")
 
         try:
+            arg = arg.replace("\\", "/")
             args = parser.parse_args(shlex.split(arg))
         except SystemExit:
             print("Invalid command format for 'dp'. Usage: dp <file> [output_dir]")
@@ -215,5 +224,18 @@ class DpCLI(cmd.Cmd):
         return stop
 
     def default(self, line):
-        """Handle unknown commands"""
+        """Handle unknown commands or attempt decompression"""
+        # 尝试进行文件解压
+        line = line.replace("\\", "/")        
+        if len(shlex.split(line)) == 1:
+            try:
+                # 如果是文件，则尝试解压
+                self.do_dp(line)
+                return
+            except Exception as e:
+                # 捕获解压过程中可能抛出的异常
+                print(f"Error during decompression: {e}")
+                return
+        
+        # 如果不是解压命令，则执行默认的错误处理逻辑
         print(f"Unknown command: '{line}'. Type 'help' for a list of commands.")

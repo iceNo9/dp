@@ -5,7 +5,6 @@ __pycache__/
 
 
 *.json
-*.txt
 *.7z
 *.rar
 *.tar

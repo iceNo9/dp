@@ -32,14 +32,15 @@ class WebDAVClient:
         if not self.client:
             return False
         try:
-            if not self.client.check("/"):
-                self.client.mkdir("/")
+            if not self.client.check("/dav"):
+                self.client.mkdir("/dav")
             return True
         except Exception as e:
             print(f"Failed to ensure remote directory: {e}")
             return False
 
     def sync(self, password_manager, mapping_manager):
+        self.list_remote_files()
         if not self.client or not self.ensure_remote_directory():
             return
         

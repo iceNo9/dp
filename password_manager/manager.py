@@ -15,7 +15,7 @@ class PasswordManager:
         """加载密码库"""
         if self.passwords_file.exists():
             try:
-                with open(self.passwords_file, "r") as f:
+                with open(self.passwords_file, "r", encoding="utf-8") as f:
                     self.data = json.load(f)
             except Exception as e:
                 logger.error(f"加载密码文件失败: {e}")
@@ -23,8 +23,8 @@ class PasswordManager:
     def save(self):
         """保存密码库到文件"""
         try:
-            with open(self.passwords_file, "w") as f:
-                json.dump(self.data, f, indent=4)
+            with open(self.passwords_file, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=4)
         except Exception as e:
             logger.error(f"保存密码文件失败: {e}")
 
@@ -63,7 +63,7 @@ class PasswordManager:
     def import_passwords(self, file_path: Path):
         """从文件导入密码"""
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 passwords = [line.strip() for line in f.readlines()]
                 for password in passwords:
                     self.add_password(password)
@@ -75,7 +75,7 @@ class PasswordManager:
         """导出密码"""
         try:
             output_file = output_dir / "passwords.txt"
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 for password in self.data["global_passwords"]:
                     f.write(f"{password}\n")
             logger.info(f"密码已导出到 '{output_file}'")
@@ -86,7 +86,7 @@ class PasswordManager:
         """导出密码映射"""
         try:
             output_file = output_dir / "mappings.txt"
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 for feature, password in self.data["feature_password_map"].items():
                     f.write(f"{feature}:{password}\n")
             logger.info(f"密码映射已导出到 '{output_file}'")
@@ -96,7 +96,7 @@ class PasswordManager:
     def import_mappings(self, file_path: Path):
         """从文件导入密码映射"""
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
                 for line in lines:
                     feature, password = line.strip().split(":", 1)  # 分割特征和值

@@ -22,7 +22,7 @@ def main():
     parser.add_argument("dest", nargs="?", help="目标目录")
 
     args = parser.parse_args()
-    # args.source = r"C:\Users\hupo9\Downloads\泡影(4).7z"
+    args.source = r"C:\Users\hupo9\Downloads\新建文件夹\电xspy.rar"
 
     
     password_manager = PasswordManager()
@@ -53,7 +53,7 @@ def main():
     elif args.source:
         source_path = Path(args.source)
         dest_path = Path(args.dest) if args.dest else source_path.with_suffix("")
-        archive_handler.extract_with_password_retry(source_path, dest_path)
+        archive_handler.extract(source_path, dest_path)
     else:
         parser.print_help()
 

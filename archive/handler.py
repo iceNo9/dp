@@ -21,20 +21,52 @@ class ArchiveHandler:
 
         self.password_manager = PasswordManager()
 
-    def extract_with_7z(self, file_path: Path, output_dir: Path, password: Optional[str] = "") -> bool:
-        """使用 7z.exe 解压"""
+    def test_password_with_7z(self, file_path: Path, password: str) -> bool:
+        """使用 7z t 测试密码"""
         try:
-            command = [str(self.seven_zip_path), "x", str(file_path), f"-o{output_dir}", "-y"]
-            command.append(f"-p{password}")
+            command = [str(self.seven_zip_path), "t", str(file_path), f"-p{password}"]
 
+            # 执行 7z t 命令进行密码验证
             result = subprocess.run(command, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+
             output = result.stdout.lower()
 
             if "wrong password" in output or "incorrect password" in output:
                 logger.debug(f"密码错误: {password}")
-                return False
+                return False  # 密码错误
             elif "error" in output:
-                logger.debug(f"7z 解压失败: {output}")
+                logger.debug(f"7z 测试失败: {output}")
+                return False  # 7z 测试失败
+            logger.info(f"密码 '{password}' 测试通过")
+            return True
+        except Exception as e:
+            logger.debug(f"7z 测试密码异常: {e}")
+            return False
+
+    def extract_with_7z(self, file_path: Path, output_dir: Path, password: Optional[str] = "") -> bool:
+        """使用 7z.exe 解压，并实时显示进度"""
+        try:
+            command = [str(self.seven_zip_path), "x", str(file_path), f"-o{output_dir}", "-y", "-bsp1"]
+            command.append(f"-p{password}")
+
+            # 使用 Popen 实现实时输出
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+
+            # 实时读取标准输出
+            for line in process.stdout:
+                line = line.strip()
+                if "%" in line:  # 进度行
+                    logger.info(f"解压进度: {line}")  # 打印进度百分比
+
+            # 等待进程结束并获取输出
+            stdout, stderr = process.communicate()
+
+            # 检查是否有错误信息
+            if "wrong password" in stdout.lower() or "incorrect password" in stdout.lower():
+                logger.debug(f"密码错误: {password}")
+                return False
+            elif "error" in stdout.lower():
+                logger.debug(f"7z 解压失败: {stdout}")
                 return False
 
             logger.info(f"文件 '{file_path}' 成功解压到 '{output_dir}' 密码:{password}")
@@ -48,13 +80,14 @@ class ArchiveHandler:
         feature = calculate_feature(file_path)
 
         # 创建一个线程池来并发尝试多个密码
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=20) as executor:
             # 1. 尝试已存储的特定密码
             saved_password = self.password_manager.get_password_by_feature(feature)
             if saved_password:
                 logger.info(f"尝试使用已保存的密码 '{saved_password}' 解压")
-                if self.extract_with_7z(file_path, output_dir, saved_password):
-                    return
+                if self.test_password_with_7z(file_path, saved_password):
+                    if self.extract_with_7z(file_path, output_dir, saved_password):
+                        return
 
             # 2. 生成全局密码列表并提交到线程池
             global_passwords = self.password_manager.data.get("global_passwords", [])
@@ -62,7 +95,7 @@ class ArchiveHandler:
             
             # 为每个密码创建任务并提交到线程池
             for password in global_passwords:
-                futures.append(executor.submit(self.extract_with_7z, file_path, output_dir, password))
+                futures.append(executor.submit(self.test_password_and_extract, file_path, output_dir, password))
 
             # 等待任务完成并检查结果
             for future in as_completed(futures):
@@ -73,15 +106,21 @@ class ArchiveHandler:
 
         logger.error(f"无法解压文件 '{file_path}'，未找到有效密码")
 
+    def test_password_and_extract(self, file_path: Path, output_dir: Path, password: str) -> bool:
+        """测试密码并解压"""
+        if self.test_password_with_7z(file_path, password):
+            return self.extract_with_7z(file_path, output_dir, password)
+        return False
+
     def extract(self, file_path: Path, output_dir: Path):
         """外部调用解压函数的入口"""
         logger.info(f"开始处理文件 '{file_path}'")
 
-        # 尝试无密码解压
+        # 1. 尝试无密码解压
         logger.info(f"尝试无密码解压")
-        if self.extract_with_7z(file_path, output_dir, password=""):
+        if self.test_password_and_extract(file_path, output_dir, password=""):
             return
 
-        # 如果文件被加密，尝试密码解压
+        # 2. 如果以上方法都失败，尝试密码解密
         logger.info(f"文件 '{file_path}' 被加密，正在尝试密码解压")
         self.extract_with_password_retry(file_path, output_dir)

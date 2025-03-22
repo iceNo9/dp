@@ -22,7 +22,7 @@ def main():
     parser.add_argument("dest", nargs="?", help="目标目录")
 
     args = parser.parse_args()
-    # args.source = r"C:\Users\hupo9\Downloads\新建文件夹\电xspy - 副本.rar"
+    # args.source = r"C:\Users\hupo9\Downloads\新建文件夹\电xspy\电xspy.7zz"
 
     
     password_manager = PasswordManager()

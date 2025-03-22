@@ -69,6 +69,12 @@ class ArchiveHandler:
                 logger.debug(f"7z 解压失败: {stdout}")
                 return False
 
+            # 获取文件的特征值，通常是文件的哈希或其他唯一标识符
+            feature = calculate_feature(file_path)
+
+            # 如果解压成功，将密码和文件特征值保存到密码管理器
+            self.password_manager.add_feature_password_mapping(feature, password)
+
             logger.info(f"文件 '{file_path}' 成功解压到 '{output_dir}' 密码:{password}")
             return True
         except Exception as e:

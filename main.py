@@ -22,6 +22,8 @@ def main():
     parser.add_argument("dest", nargs="?", help="目标目录")
 
     args = parser.parse_args()
+    # args.source = r"C:\Users\hupo9\Downloads\泡影(4).7z"
+
     
     password_manager = PasswordManager()
     archive_handler = ArchiveHandler()

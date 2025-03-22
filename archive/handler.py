@@ -4,6 +4,7 @@ from typing import Optional
 from log_config import logger
 from utils.file_utils import calculate_feature
 from password_manager.manager import PasswordManager
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class ArchiveHandler:
@@ -43,41 +44,44 @@ class ArchiveHandler:
             return False
 
     def extract_with_password_retry(self, file_path: Path, output_dir: Path):
-        """尝试无密码解压，若失败则遍历密码库"""
+        """使用线程池尝试不同密码解压"""
         feature = calculate_feature(file_path)
 
-        # 1. 尝试无密码解压
-        logger.debug(f"尝试无密码解压文件 '{file_path}'")
-        if self.extract_with_7z(file_path, output_dir, password=""):
-            return
+        # 创建一个线程池来并发尝试多个密码
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # 1. 尝试已存储的特定密码
+            saved_password = self.password_manager.get_password_by_feature(feature)
+            if saved_password:
+                logger.info(f"尝试使用已保存的密码 '{saved_password}' 解压")
+                if self.extract_with_7z(file_path, output_dir, saved_password):
+                    return
 
-        # 2. 尝试已存储的特定密码
-        saved_password = self.password_manager.get_password_by_feature(feature)
-        if saved_password:
-            logger.debug(f"尝试使用已保存的密码 '{saved_password}' 解压")
-            if self.extract_with_7z(file_path, output_dir, saved_password):
-                return
+            # 2. 生成全局密码列表并提交到线程池
+            global_passwords = self.password_manager.data.get("global_passwords", [])
+            futures = []
+            
+            # 为每个密码创建任务并提交到线程池
+            for password in global_passwords:
+                futures.append(executor.submit(self.extract_with_7z, file_path, output_dir, password))
 
-        # 3. 遍历全局密码
-        for password in self.password_manager.data.get("global_passwords", []):
-            logger.debug(f"尝试使用密码 '{password}' 解压")
-            if self.extract_with_7z(file_path, output_dir, password):
-                self.password_manager.add_feature_password_mapping(feature, password)
-                logger.info(f"文件 '{file_path}' 的密码为 '{password}'")
-                return
+            # 等待任务完成并检查结果
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    logger.info("密码解压成功")
+                    return
 
         logger.error(f"无法解压文件 '{file_path}'，未找到有效密码")
 
     def extract(self, file_path: Path, output_dir: Path):
         """外部调用解压函数的入口"""
-        logger.debug(f"开始处理文件 '{file_path}'")
+        logger.info(f"开始处理文件 '{file_path}'")
 
-        # 直接尝试解压，先使用无密码
-        logger.debug(f"尝试无密码解压文件 '{file_path}'")
+        # 尝试无密码解压
+        logger.info(f"尝试无密码解压")
         if self.extract_with_7z(file_path, output_dir, password=""):
-            logger.info(f"文件 '{file_path}' 成功解压到 '{output_dir}' 无密码")
             return
 
-        # 如果无密码解压失败，尝试密码解压
-        logger.info(f"文件 '{file_path}' 需要密码，正在尝试密码解压")
+        # 如果文件被加密，尝试密码解压
+        logger.info(f"文件 '{file_path}' 被加密，正在尝试密码解压")
         self.extract_with_password_retry(file_path, output_dir)

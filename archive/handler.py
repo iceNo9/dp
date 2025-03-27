@@ -22,23 +22,31 @@ class ArchiveHandler:
         self.password_manager = PasswordManager()
 
     def test_password_with_7z(self, file_path: Path, password: str) -> bool:
-        """使用 7z t 测试密码"""
+        """使用 7z t 测试密码，只有输出包含 'Everything is Ok' 才算通过"""
         try:
             command = [str(self.seven_zip_path), "t", str(file_path), f"-p{password}"]
+            logger.debug(f"测试指令: {command}")
 
             # 执行 7z t 命令进行密码验证
             result = subprocess.run(command, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
             output = result.stdout.lower()
+            logger.debug(f"7z 测试密码输出: {output}")
 
-            if "wrong password" in output or "incorrect password" in output:
+            # 如果输出包含 "Everything is Ok"，说明密码正确且文件完整
+            if "everything is ok" in output:
+                logger.debug(f"密码 '{password}' 测试通过")
+                return True
+
+            # 如果输出包含 "Wrong password"，说明密码错误
+            elif "wrong password" in output:
                 logger.debug(f"密码错误: {password}")
                 return False  # 密码错误
-            elif "error" in output:
-                logger.debug(f"7z 测试失败: {output}")
-                return False  # 7z 测试失败
-            logger.info(f"密码 '{password}' 测试通过")
-            return True
+
+            # 如果没有找到 "Everything is Ok" 或 "Wrong password"，说明压缩包可能不完整
+            logger.debug(f"压缩包不完整或出现其他错误: {output}")
+            return False
+        
         except Exception as e:
             logger.debug(f"7z 测试密码异常: {e}")
             return False
